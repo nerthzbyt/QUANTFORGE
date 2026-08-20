@@ -1,1 +1,11 @@
-Nothing needs to be added to .gitignore since only a README.md file was modified and no build artifacts, dependencies, or temporary files were detected in the changes.
+```
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+server.log
+
+# Vite cache
+node_modules/.vite/
+```
