@@ -1,11 +1,18 @@
 ```
+# Build artifacts
+dist/
+build/
+*.js
+*.css
+
 # Dependencies
 node_modules/
 
-# Logs
+# Logs and temp files
 *.log
-server.log
+*.tmp
 
-# Vite cache
-node_modules/.vite/
+# Editors
+.vscode/
+.idea/
 ```
