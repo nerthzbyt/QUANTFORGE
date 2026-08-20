@@ -1,11 +1,12 @@
 import { FIELD_GROUPS, PRESETS } from "../lib/profiles";
-import { fmtNum, fmtShort, SectionTitle } from "./ui";
+import { Badge, fmtNum, fmtShort, SectionTitle } from "./ui";
 
 interface Props {
   env: Record<string, number>;
   setField: (k: string, v: number) => void;
   presetId: string;
   applyPreset: (id: string) => void;
+  origin: "demo" | "live";
   itemName: string;
   setItemName: (s: string) => void;
   seed: number;
@@ -22,7 +23,22 @@ export default function InputsPanel(p: Props) {
   return (
     <div className="space-y-4">
       <section className="panel p-4 anim-fade-up">
-        <SectionTitle code="01" title="Datos de mercado" />
+        <SectionTitle
+          code="02"
+          title="Datos de mercado"
+          right={
+            p.origin === "live" ? (
+              <Badge tone="mint">en vivo · API</Badge>
+            ) : (
+              <Badge tone="neutral">demo · editable</Badge>
+            )
+          }
+        />
+        {p.origin === "live" && (
+          <p className="-mt-1 mb-2 font-mono text-[9px] leading-snug text-mint-500/90">
+            campos alimentados por la API — edítalos y volverás a modo demo.
+          </p>
+        )}
 
         <label className="mb-1 block font-mono text-[9.5px] uppercase tracking-[0.16em] text-fog-500">
           ítem analizado
@@ -34,6 +50,10 @@ export default function InputsPanel(p: Props) {
           spellCheck={false}
         />
 
+        <div className="mb-1.5 flex items-center gap-2">
+          <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-fog-500">escenarios demo · sin conexión</span>
+          <span className="h-px flex-1 bg-line-800" />
+        </div>
         <div className="mb-4 flex flex-wrap gap-1.5">
           {PRESETS.map((pr) => {
             const active = p.presetId === pr.id;

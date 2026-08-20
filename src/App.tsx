@@ -2,11 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { evaluateAll, FULL_SOURCES, shortName } from "./lib/engine";
 import { classifyRegime, extractFeatures, trainModel } from "./lib/ai";
 import { PRESETS } from "./lib/profiles";
+import type { PricePayload } from "./lib/tsmApi";
 import { Badge, fmtFull, fmtShort } from "./components/ui";
 import InputsPanel from "./components/InputsPanel";
 import EnginePanel from "./components/EnginePanel";
 import AiPanel from "./components/AiPanel";
 import ProfilePanel from "./components/ProfilePanel";
+import ApiPanel, { type LiveMeta } from "./components/ApiPanel";
+import DocsView from "./views/DocsView";
+import GithubView from "./views/GithubView";
+
+type View = "consola" | "docs" | "github";
 
 function Sigil() {
   return (
@@ -21,6 +27,9 @@ function Sigil() {
 }
 
 export default function App() {
+  const [view, setView] = useState<View>("consola");
+  const [origin, setOrigin] = useState<"demo" | "live">("demo");
+  const [liveMeta, setLiveMeta] = useState<LiveMeta | null>(null);
   const [presetId, setPresetId] = useState("potion");
   const [env, setEnv] = useState<Record<string, number>>({ ...PRESETS[0].data });
   const [itemName, setItemName] = useState("Poción de flujo temporal");
@@ -52,6 +61,7 @@ export default function App() {
   const setField = (k: string, v: number) => {
     setEnv((prev) => ({ ...prev, [k]: v }));
     setPresetId("custom");
+    setOrigin("demo");
   };
 
   const applyPreset = (id: string) => {
@@ -60,6 +70,22 @@ export default function App() {
     setEnv({ ...pr.data });
     setPresetId(id);
     setItemName(pr.label);
+    setOrigin("demo");
+    setLiveMeta(null);
+  };
+
+  const onApplyLive = (payload: PricePayload, meta: LiveMeta) => {
+    setEnv((prev) => {
+      const next = { ...prev };
+      for (const [k, v] of Object.entries(payload)) {
+        if (typeof v === "number") next[k] = v;
+      }
+      return next;
+    });
+    setPresetId("custom");
+    setOrigin("live");
+    setItemName(meta.itemName);
+    setLiveMeta(meta);
   };
 
   const fair = srcValues["tsm_exchange_pack_fair_smooth"] ?? 0;
@@ -92,19 +118,54 @@ export default function App() {
             </div>
           </div>
 
+          <nav className="ml-2 flex shrink-0 items-center gap-1 rounded-md border border-line-800 bg-ink-900/70 p-1">
+            {(
+              [
+                { id: "consola", label: "Consola" },
+                { id: "docs", label: "Documentación" },
+                { id: "github", label: "GitHub" },
+              ] as const
+            ).map((v) => (
+              <button
+                key={v.id}
+                onClick={() => { setView(v.id); window.scrollTo({ top: 0 }); }}
+                className={`rounded px-2.5 py-1 font-display text-[11.5px] font-semibold transition-all duration-150 active:scale-[0.96] ${
+                  view === v.id
+                    ? "bg-gold-500/14 text-gold-300 shadow-[0_0_0_1px_rgba(246,184,61,0.35)]"
+                    : "text-fog-500 hover:text-fog-200"
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </nav>
+
           <div className="hidden min-w-0 flex-1 items-center gap-2 rounded-md border border-line-800 bg-ink-900/70 px-3 py-1.5 lg:flex">
             <span className="font-mono text-[10px] text-mint-400">$</span>
             <span className="truncate font-mono text-[10px] text-fog-400">
               quantforge --item <span className="text-gold-300">"{itemName || "—"}"</span> --engine tsm-expr/3
-              --ml quantforge-ml@2.4 --riesgo {(aversion * 100).toFixed(0)}% --generar{" "}
-              <span className="text-gold-300">5-perfiles</span>
+              --ml quantforge-ml@2.4 --origen <span className="text-mint-300">{origin}</span> --generar{" "}
+              <span className="text-gold-300">6-perfiles</span>
             </span>
             <span className="caret font-mono text-[10px] text-gold-400">▊</span>
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            {origin === "live" && liveMeta ? (
+              <span
+                className="hidden items-center gap-1.5 rounded border border-mint-500/40 bg-mint-500/10 px-2 py-[3px] font-mono text-[9px] uppercase tracking-[0.12em] text-mint-300 md:flex"
+                title={`${liveMeta.itemName} · #${liveMeta.itemId} · ${liveMeta.provider}`}
+              >
+                <span className="pulse-dot h-[6px] w-[6px] rounded-full bg-mint-400" />
+                API · {liveMeta.region.toUpperCase()} · #{liveMeta.itemId}
+              </span>
+            ) : (
+              <span className="hidden items-center gap-1.5 rounded border border-line-700 bg-ink-800/70 px-2 py-[3px] font-mono text-[9px] uppercase tracking-[0.12em] text-fog-500 md:flex">
+                <span className="h-[6px] w-[6px] rounded-full bg-fog-600" />
+                modo demo
+              </span>
+            )}
             <Badge tone={regime.color}>{regime.label}</Badge>
-            <span className="hidden font-mono text-[9.5px] text-fog-500 sm:inline">#{seed}</span>
             <span className="flex items-center gap-1.5 rounded border border-mint-500/35 bg-mint-500/8 px-2 py-[3px] font-mono text-[9px] uppercase tracking-[0.14em] text-mint-300">
               <span className="pulse-dot h-[7px] w-[7px] rounded-full bg-mint-400" />
               núcleo activo
@@ -114,6 +175,11 @@ export default function App() {
       </header>
 
       <main className="relative z-10 mx-auto max-w-[1660px] px-4 pb-10 pt-4">
+        {view === "docs" && <DocsView />}
+        {view === "github" && <GithubView />}
+
+        {view === "consola" && (
+        <>
         {/* ---------- KPIs ---------- */}
         <div className="panel mb-4 grid grid-cols-2 divide-x divide-line-800 overflow-hidden lg:grid-cols-4 anim-fade-up">
           <div className="px-4 py-3">
@@ -144,12 +210,14 @@ export default function App() {
 
         {/* ---------- espacio de trabajo ---------- */}
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-          <div className="xl:col-span-3">
+          <div className="space-y-4 xl:col-span-3">
+            <ApiPanel onApply={onApplyLive} />
             <InputsPanel
               env={env}
               setField={setField}
               presetId={presetId}
               applyPreset={applyPreset}
+              origin={origin}
               itemName={itemName}
               setItemName={setItemName}
               seed={seed}
@@ -204,6 +272,8 @@ export default function App() {
             )}
           </div>
         </div>
+        </>
+        )}
       </main>
 
       {/* ---------- ticker de fuentes ---------- */}
