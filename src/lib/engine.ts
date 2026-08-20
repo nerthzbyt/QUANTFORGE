@@ -205,6 +205,7 @@ export function evaluateAll(
 
 /* ============================================================
    Definición de fuentes — baseline heredado + filtros exactos v2
+   + nuevas fuentes de generación de datos de mercado en tiempo real
    ============================================================ */
 
 const P = "tsm_exchange_pack";
@@ -256,6 +257,40 @@ export const V2_SOURCES: Record<string, string> = {
   [`${P}_edge_index`]: `ifgt(${P}_fair_smooth,0,round((${P}_fair_smooth-${P}_hard_floor)/${P}_fair_smooth*100,1),0)`,
 };
 
+/* NUEVAS FUENTES DE DATOS DE MERCADO EN TIEMPO REAL - v3 */
+export const V3_REALTIME_SOURCES: Record<string, string> = {
+  /* Análisis de tendencia temporal */
+  [`${P}_trend_short`]: "ifgt(dbrecent,dbhistorical,1,iflt(dbrecent,dbhistorical,-1,0))",
+  [`${P}_trend_region`]: "ifgt(dbmarket,dbregionmarketavg,1,iflt(dbmarket,dbregionmarketavg,-1,0))",
+  [`${P}_trend_momentum_pct`]: "ifgt(dbhistorical,0,(dbrecent-dbhistorical)/dbhistorical*100,0)",
+  
+  /* Métricas de rotación de inventario */
+  [`${P}_turnover_rate`]: "ifgt(numinventory,0,dbregionsoldperday*numinventory/numinventory,0)",
+  [`${P}_days_to_sell`]: "ifgt(dbregionsoldperday,0.01,numinventory/dbregionsoldperday,999)",
+  [`${P}_stock_pressure`]: "ifgt(numinventory,100,ifgt(dbregionsoldperday,1,0,1),0)",
+  
+  /* Análisis de margen y rentabilidad */
+  [`${P}_margin_absolute`]: "max(0c,dbminbuyout-crafting)",
+  [`${P}_margin_pct`]: "ifgt(crafting,0,(dbminbuyout-crafting)/crafting*100,0)",
+  [`${P}_roi_craft`]: "ifgt(matprice,0,(dbmarket-matprice)/matprice*100,0)",
+  [`${P}_roi_flip`]: "ifgt(avgbuy,0,(dbminbuyout-avgbuy)/avgbuy*100,0)",
+  
+  /* Indicadores de oportunidad */
+  [`${P}_arbitrage_signal`]: "ifgt(${P}_region_divergence,dbmarket*0.30,1,0)",
+  [`${P}_buy_signal`]: "ifgt(${P}_margin_pct,25,ifgt(${P}_liquid_guard,1,1,0),0)",
+  [`${P}_sell_signal`]: "ifgt(${P}_momentum,0,ifgt(dbregionsalerate,0.08,1,0),0)",
+  
+  /* Métricas de riesgo avanzado */
+  [`${P}_crash_risk`]: "iflt(dbrecent,dbhistorical*0.85,ifgt(dbregionsoldperday,0.5,1,0),0)",
+  [`${P}_saturation_index`]: "min(numinventory/(dbregionsoldperday*10+1),10)",
+  [`${P}_competition_idx`]: "ifgt(dbregionsalerate,0.20,iflt(${P}_margin_pct,15,1,0),0)",
+  
+  /* Fuentes compuestas de decisión */
+  [`${P}_opportunity_score`]: `avg(${P}_buy_signal,${P}_sell_signal,ifgt(${P}_arbitrage_signal,0,1,0))`,
+  [`${P}_risk_score`]: `avg(${P}_crash_risk,${P}_competition_idx,min(${P}_saturation_index/10,1))`,
+  [`${P}_action_signal`]: `ifgt(${P}_opportunity_score,0.66,iflt(${P}_risk_score,0.33,1,0),0)`,
+};
+
 /* Fuentes ajustadas por IA para un prefijo y coeficientes dados */
 export function tunedSources(prefix: string, c: Record<string, number>): Record<string, string> {
   const n = (x: number) => String(Math.round(x * 1000) / 1000);
@@ -273,7 +308,7 @@ export function tunedSources(prefix: string, c: Record<string, number>): Record<
   };
 }
 
-export const FULL_SOURCES: Record<string, string> = { ...BASE_SOURCES, ...V2_SOURCES };
+export const FULL_SOURCES: Record<string, string> = { ...BASE_SOURCES, ...V2_SOURCES, ...V3_REALTIME_SOURCES };
 
 export interface SourceGroup {
   label: string;
@@ -293,6 +328,12 @@ export const SOURCE_GROUPS: SourceGroup[] = [
   { label: "Guardas de demanda · baseline", keys: [`${P}_liquid_guard`, `${P}_volume_guard`, `${P}_demand_guard`, `${P}_premium_guard`, `${P}_dump_guard`], guard: true },
   { label: "Filtros exactos · v2", keys: [`${P}_spread_ratio`, `${P}_volatility_guard`, `${P}_region_divergence`, `${P}_region_guard`, `${P}_momentum`, `${P}_inventory_days`, `${P}_inventory_guard`, `${P}_quality_gate`], guard: true, ratio: [`${P}_spread_ratio`, `${P}_momentum`] },
   { label: "Índices compuestos · IA", keys: [`${P}_liquidity_index`, `${P}_demand_index`, `${P}_stability_index`, `${P}_edge_index`], index: true },
+  { label: "Tendencias · v3 realtime", keys: [`${P}_trend_short`, `${P}_trend_region`, `${P}_trend_momentum_pct`], ratio: [`${P}_trend_momentum_pct`] },
+  { label: "Rotación inventario · v3", keys: [`${P}_turnover_rate`, `${P}_days_to_sell`, `${P}_stock_pressure`] },
+  { label: "Márgenes y ROI · v3", keys: [`${P}_margin_absolute`, `${P}_margin_pct`, `${P}_roi_craft`, `${P}_roi_flip`], ratio: [`${P}_margin_pct`, `${P}_roi_craft`, `${P}_roi_flip`] },
+  { label: "Señales de mercado · v3", keys: [`${P}_arbitrage_signal`, `${P}_buy_signal`, `${P}_sell_signal`, `${P}_action_signal`], guard: true },
+  { label: "Riesgo avanzado · v3", keys: [`${P}_crash_risk`, `${P}_saturation_index`, `${P}_competition_idx`, `${P}_risk_score`], ratio: [`${P}_risk_score`] },
+  { label: "Scores de decisión · v3", keys: [`${P}_opportunity_score`, `${P}_risk_score`, `${P}_action_signal`], index: true },
 ];
 
 export const GUARD_KEYS = new Set(

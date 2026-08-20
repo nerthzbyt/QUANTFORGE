@@ -16,69 +16,131 @@ export interface Preset {
   id: string;
   label: string;
   desc: string;
-  data: Record<string, number>;
+  // Función que genera datos dinámicos basados en parámetros de mercado
+  generator: (basePrice?: number) => Record<string, number>;
+  // Datos precalculados para demo inicial (se pueden regenerar)
+  get data(): Record<string, number>;
 }
+
+/** Generador de presets dinámicos sin hardcoding */
+const generatePresetData = (
+  baseMarket: number,
+  volatility: number, // 0-1: bajo a alto
+  demandLevel: number, // 0-1: baja a alta
+  hasCraft: boolean,
+  scenario: "normal" | "dump" | "premium" | "stagnant"
+): Record<string, number> => {
+  const randomFactor = () => 0.95 + Math.random() * 0.1; // ±5% variación
+  
+  let minBuyoutMult = 1.0;
+  let saleRate = 0.05;
+  let soldPerDay = 1.0;
+  let regionDiv = 0.0;
+  
+  switch (scenario) {
+    case "dump":
+      minBuyoutMult = 0.50; // 50% del market = dump
+      saleRate = 0.08;
+      soldPerDay = 1.2;
+      break;
+    case "premium":
+      minBuyoutMult = 1.45; // 45% sobre market = prima
+      saleRate = 0.12;
+      soldPerDay = 0.9;
+      regionDiv = 0.60; // alta divergencia regional
+      break;
+    case "stagnant":
+      minBuyoutMult = 1.02;
+      saleRate = 0.015;
+      soldPerDay = 0.08;
+      break;
+    case "normal":
+    default:
+      minBuyoutMult = 1.0 + (volatility * 0.3);
+      saleRate = 0.05 + (demandLevel * 0.15);
+      soldPerDay = 0.5 + (demandLevel * 3);
+  }
+  
+  const dbmarket = Math.round(baseMarket * randomFactor());
+  const dbminbuyout = Math.round(dbmarket * minBuyoutMult * randomFactor());
+  const dbhistorical = Math.round(dbmarket * (0.92 + volatility * 0.16) * randomFactor());
+  const dbrecent = Math.round(dbmarket * (0.98 + (demandLevel - 0.5) * 0.2) * randomFactor());
+  
+  const regionMult = 1.0 + regionDiv;
+  const dbregionmarketavg = Math.round(dbmarket * regionMult * randomFactor());
+  const dbregionhistorical = Math.round(dbhistorical * regionMult * randomFactor());
+  const dbregionsaleavg = Math.round(dbrecent * (0.95 + regionDiv * 0.3) * randomFactor());
+  
+  const craftingCost = hasCraft ? Math.round(dbmarket * (0.45 + Math.random() * 0.15)) : 0;
+  const matPrice = hasCraft ? Math.round(craftingCost * (0.95 + Math.random() * 0.1)) : 0;
+  
+  return {
+    dbmarket,
+    dbminbuyout,
+    dbrecent,
+    dbhistorical,
+    dbregionmarketavg,
+    dbregionhistorical,
+    dbregionsaleavg,
+    dbregionsalerate: Math.round(saleRate * 1000) / 1000,
+    dbregionsoldperday: Math.round(soldPerDay * 100) / 100,
+    vendorsell: Math.round(dbmarket * 0.02 * randomFactor()),
+    vendorbuy: Math.round(dbmarket * 0.05 * randomFactor()),
+    avgbuy: Math.round(dbmarket * 0.82 * randomFactor()),
+    crafting: craftingCost,
+    matprice: matPrice,
+    destroy: Math.round(dbmarket * 0.15 * randomFactor()),
+    convert_value: Math.round(dbmarket * 0.22 * randomFactor()),
+    numinventory: Math.floor(10 + Math.random() * 80 * (1 - demandLevel)),
+  };
+};
 
 export const PRESETS: Preset[] = [
   {
     id: "potion",
     label: "Poción de flujo",
     desc: "demanda alta · líquido",
-    data: {
-      dbmarket: 18500, dbminbuyout: 19200, dbrecent: 19600, dbhistorical: 17400,
-      dbregionmarketavg: 18900, dbregionhistorical: 17800, dbregionsaleavg: 19100,
-      dbregionsalerate: 0.16, dbregionsoldperday: 2.4,
-      vendorsell: 350, vendorbuy: 900, avgbuy: 15200, crafting: 9800, matprice: 10400,
-      destroy: 2600, convert_value: 4200, numinventory: 18,
-    },
+    generator: (base = 18000) => generatePresetData(base, 0.25, 0.85, true, "normal"),
+    get data() { return this.generator(); },
   },
   {
     id: "scale",
     label: "Escama dracónica",
     desc: "volátil · spread amplio",
-    data: {
-      dbmarket: 92000, dbminbuyout: 134000, dbrecent: 88000, dbhistorical: 97000,
-      dbregionmarketavg: 95000, dbregionhistorical: 93000, dbregionsaleavg: 91000,
-      dbregionsalerate: 0.07, dbregionsoldperday: 0.6,
-      vendorsell: 1200, vendorbuy: 3000, avgbuy: 84000, crafting: 0, matprice: 0,
-      destroy: 18000, convert_value: 0, numinventory: 26,
-    },
+    generator: (base = 90000) => generatePresetData(base, 0.75, 0.35, false, "premium"),
+    get data() { return this.generator(); },
   },
   {
     id: "cloth",
     label: "Tela sombría",
     desc: "estancado · sobrestock",
-    data: {
-      dbmarket: 5400, dbminbuyout: 5600, dbrecent: 5300, dbhistorical: 5500,
-      dbregionmarketavg: 5450, dbregionhistorical: 5400, dbregionsaleavg: 5380,
-      dbregionsalerate: 0.018, dbregionsoldperday: 0.12,
-      vendorsell: 250, vendorbuy: 600, avgbuy: 4800, crafting: 3900, matprice: 4100,
-      destroy: 900, convert_value: 1500, numinventory: 96,
-    },
+    generator: (base = 5500) => generatePresetData(base, 0.15, 0.10, true, "stagnant"),
+    get data() { return this.generator(); },
   },
   {
     id: "gem",
     label: "Gema facetada",
     desc: "divergencia regional · prima",
-    data: {
-      dbmarket: 41000, dbminbuyout: 61000, dbrecent: 44000, dbhistorical: 39000,
-      dbregionmarketavg: 78000, dbregionhistorical: 72000, dbregionsaleavg: 74500,
-      dbregionsalerate: 0.09, dbregionsoldperday: 0.8,
-      vendorsell: 900, vendorbuy: 2200, avgbuy: 38000, crafting: 29500, matprice: 30200,
-      destroy: 12000, convert_value: 22000, numinventory: 12,
-    },
+    generator: (base = 42000) => generatePresetData(base, 0.55, 0.50, true, "premium"),
+    get data() { return this.generator(); },
   },
   {
     id: "oil",
     label: "Aceite de brujo",
     desc: "dump detectado",
-    data: {
-      dbmarket: 12400, dbminbuyout: 6200, dbrecent: 11800, dbhistorical: 13100,
-      dbregionmarketavg: 12600, dbregionhistorical: 12400, dbregionsaleavg: 12300,
-      dbregionsalerate: 0.11, dbregionsoldperday: 1.6,
-      vendorsell: 400, vendorbuy: 950, avgbuy: 10200, crafting: 7600, matprice: 7900,
-      destroy: 2100, convert_value: 3600, numinventory: 34,
-    },
+    generator: (base = 12500) => generatePresetData(base, 0.40, 0.60, true, "dump"),
+    get data() { return this.generator(); },
+  },
+  // Nuevo preset dinámico personalizado
+  {
+    id: "custom_dynamic",
+    label: "Personalizado",
+    desc: "genera datos desde parámetros",
+    generator: (base = 15000) => ({
+      ...generatePresetData(base, 0.35, 0.50, true, "normal"),
+      numinventory: 25,
+    }),
+    get data() { return this.generator(); },
   },
 ];
 
