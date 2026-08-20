@@ -1,4 +1,1 @@
-```typescript
-// No build artifacts, dependencies, or temp files detected in changes
-// Only source files (.ts) were modified
-```
+Nothing needs to be added to .gitignore since only a README.md file was modified and no build artifacts, dependencies, or temporary files were detected in the changes.
