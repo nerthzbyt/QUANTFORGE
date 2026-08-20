@@ -28,6 +28,7 @@ export default function App() {
   const [iterations, setIterations] = useState(240);
   const [aversion, setAversion] = useState(0.35);
   const [trainNonce, setTrainNonce] = useState(0);
+  const [gen, setGen] = useState(1);
   const [training, setTraining] = useState(false);
   const [tab, setTab] = useState<"ia" | "perfil">("ia");
 
@@ -35,9 +36,9 @@ export default function App() {
   const feats = useMemo(() => extractFeatures(env, srcValues), [env, srcValues]);
   const regime = useMemo(() => classifyRegime(feats), [feats]);
   const train = useMemo(
-    () => trainModel(env, srcValues, feats, { seed, iterations, aversion }),
+    () => trainModel(env, srcValues, feats, { seed, iterations, aversion, gen }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [env, seed, iterations, aversion, trainNonce],
+    [env, seed, iterations, aversion, trainNonce, gen],
   );
 
   const firstRun = useRef(true);
@@ -157,7 +158,10 @@ export default function App() {
               setIterations={setIterations}
               aversion={aversion}
               setAversion={setAversion}
-              onRetrain={() => setTrainNonce((n) => n + 1)}
+              onRetrain={() => {
+                setTrainNonce((n) => n + 1);
+                setGen((g) => g + 1);
+              }}
               training={training}
             />
           </div>

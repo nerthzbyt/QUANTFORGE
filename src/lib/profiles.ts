@@ -5,7 +5,7 @@
    ============================================================ */
 
 import { BASE_SOURCES, V2_SOURCES, tunedSources } from "./engine";
-import type { Coeffs, Features, Regime, TrainResult } from "./ai";
+import type { BaselineEvo, Coeffs, Features, Regime, TrainResult } from "./ai";
 import { BASELINE_COEFFS } from "./ai";
 
 const P = "tsm_exchange_pack";
@@ -192,6 +192,42 @@ const OPERATION_VARS = {
   sniperopmax: "sniperopmax",
 };
 
+/* ---------------- nombres evolutivos de perfil ---------------- */
+
+/** Cada re-entrenamiento incrementa la generación → el nombre evoluciona. */
+export function evolveName(prefix: string, id: string, gen: number): string {
+  return `${prefix}_g${gen}:${id}`;
+}
+
+/** Genealogía del nombre: las últimas generaciones del mismo perfil. */
+export function lineage(prefix: string, id: string, gen: number, depth = 3): string[] {
+  const out: string[] = [];
+  for (let g = gen; g >= Math.max(1, gen - depth + 1); g--) {
+    out.push(evolveName(prefix, id, g));
+  }
+  return out;
+}
+
+/* ---------------- fuentes multi-fórmula ---------------- */
+
+/**
+ * Variantes alternativas por punto de operación (min / normal / max).
+ * Todas son custom sources TSM válidas que referencian otras fuentes
+ * ya declaradas; el perfil expone cada variante por separado.
+ */
+export function tunedVariantSources(prefix: string, c: Coeffs): Record<string, string> {
+  const n = (x: number) => String(Math.round(x * 1000) / 1000);
+  return {
+    [`${prefix}_min_aggr`]: `round(max(${prefix}_floor_ai,${prefix}_sane_ai*${n(c.minMult * 0.92)},${P}_craft_profit_aggressive),1c)`,
+    [`${prefix}_min_target`]: `round(max(${prefix}_floor_ai,${prefix}_sane_ai*${n(c.minMult)},${P}_craft_profit_target),1c)`,
+    [`${prefix}_min_cons`]: `round(max(${prefix}_floor_ai,${prefix}_sane_ai*${n(Math.min(c.minMult * 1.15, 0.95))},${P}_craft_profit_target),1c)`,
+    [`${prefix}_norm_value`]: `round(max(${prefix}_sane_ai*${n(c.normMult)},${P}_craft_profit_target),1c)`,
+    [`${prefix}_norm_premium`]: `round(max(${prefix}_sane_ai*${n(c.normMult * 1.15)},${P}_craft_profit_conservative),1c)`,
+    [`${prefix}_max_fast`]: `round(max(${prefix}_sane_ai*${n(c.maxMult * 0.8)},${P}_craft_profit_target),1c)`,
+    [`${prefix}_max_premium`]: `round(max(${prefix}_sane_ai*${n(c.maxMult)},${P}_craft_profit_conservative),1c)`,
+  };
+}
+
 /* ---------------- catálogo de estrategias ---------------- */
 
 export interface StrategyDef {
@@ -205,13 +241,15 @@ export const STRATEGIES: StrategyDef[] = [
   { id: "balanced", label: "Balanced", kind: "baseline", desc: "referencia heredada del baseline" },
   { id: "fast_liquidity", label: "Fast Liquidity", kind: "baseline", desc: "rotación rápida, margen comprimido" },
   { id: "premium", label: "Premium", kind: "baseline", desc: "margen alto, ventas lentas" },
+  { id: "evo_balanced", label: "Balanced Evo", kind: "ia", desc: "baseline dinámico: se adapta al régimen en cada generación" },
   { id: "adaptive_quant", label: "Adaptive Quant", kind: "ia", desc: "coeficientes calibrados por el optimizador" },
   { id: "sniper_quant", label: "Sniper Quant", kind: "ia", desc: "sesgo de compra agresiva a descuento" },
 ];
 
-export function coeffsFor(id: string, train: TrainResult): Coeffs {
-  if (id === "adaptive_quant") return train.adaptive;
-  if (id === "sniper_quant") return train.sniper;
+export function coeffsFor(id: string, ctx: BuildCtx): Coeffs {
+  if (id === "adaptive_quant") return ctx.train.adaptive;
+  if (id === "sniper_quant") return ctx.train.sniper;
+  if (id === "evo_balanced") return ctx.dyn.coeffs;
   return BASELINE_COEFFS[id] ?? BASELINE_COEFFS.balanced;
 }
 
@@ -223,6 +261,7 @@ interface BuildCtx {
   feats: Features;
   regime: Regime;
   train: TrainResult;
+  dyn: BaselineEvo;
   item: string;
   generatedAt: string;
 }
@@ -230,7 +269,7 @@ interface BuildCtx {
 const r2 = (x: number) => Math.round(x * 100) / 100;
 
 function aiMetaBlock(id: string, ctx: BuildCtx): Record<string, unknown> {
-  const coeffs = coeffsFor(id, ctx.train);
+  const coeffs = coeffsFor(id, ctx);
   const strat = ctx.train.strategies.find((s) => s.id === id);
   return {
     engine: "quantforge-ml",
@@ -304,25 +343,35 @@ export function buildProfile(id: string, ctx: BuildCtx): Record<string, unknown>
       operation_vars: OPERATION_VARS,
     };
     return {
-      name: `${P}:${id}`,
+      name: evolveName(P, id, ctx.train.gen),
       auctioning: auct,
       shopping: SHOPPING,
       sniping: SNIPING,
       crafting: CRAFTING,
       vendor: VENDOR,
-      meta: id === "balanced" ? metaFull : metaShort,
+      meta: {
+        ...(id === "balanced" ? metaFull : metaShort),
+        baseline_mode: "dinámico-evolutivo",
+        lineage: lineage(P, id, ctx.train.gen),
+      },
     };
   }
 
-  /* ---- estrategias IA: parámetros nuevos + filtros exactos ---- */
+  /* ---- estrategias IA: parámetros nuevos + filtros exactos + multi-fórmula ---- */
   const ap = `tsm_${id}`;
-  const c = coeffsFor(id, ctx.train);
+  const c = coeffsFor(id, ctx);
+  const gen = ctx.train.gen;
   const n = (x: number) => String(Math.round(x * 1000) / 1000);
-  const sources = { ...BASE_SOURCES, ...V2_SOURCES, ...tunedSources(ap, c) };
+  const sources = {
+    ...BASE_SOURCES,
+    ...V2_SOURCES,
+    ...tunedSources(ap, c),
+    ...tunedVariantSources(ap, c),
+  };
   const roiMult = n(Math.max(1.1, c.normMult * 1.12));
 
   return {
-    name: `${ap}:${id}`,
+    name: evolveName(ap, id, gen),
     auctioning: {
       ...AUCT_COMMON,
       min: `${ap}_auction_min_ai`,
@@ -377,6 +426,12 @@ export function buildProfile(id: string, ctx: BuildCtx): Record<string, unknown>
       demand_guard: `${P}_demand_guard`,
       quality_gate: `${P}_quality_gate`,
       operation_vars: OPERATION_VARS,
+      multi_formula: {
+        min: [`${ap}_min_aggr`, `${ap}_min_target`, `${ap}_min_cons`],
+        normal: [`${ap}_norm_value`, `${ap}_norm_premium`],
+        max: [`${ap}_max_fast`, `${ap}_max_premium`],
+      },
+      lineage: lineage(ap, id, gen),
       ai: aiMetaBlock(id, ctx),
     },
   };
@@ -391,7 +446,15 @@ export function buildPack(ctx: BuildCtx): Record<string, unknown> {
       math_core: "tsm-expr parser v3 (recursivo descendente, memoizado)",
       ml_core: "quantforge-ml 2.4 — hill-climbing + monte-carlo",
       filters: "baseline guards + filtros exactos v2 (volatilidad, región, inventario, momentum, quality_gate)",
+      naming: "nombres de perfil evolutivos por generación (g{gen})",
       item: ctx.item,
+    },
+    dynamic_baseline: {
+      generation: ctx.dyn.gen,
+      version: ctx.dyn.version,
+      regime: ctx.dyn.label,
+      coefficients: ctx.dyn.coeffs,
+      deltas_vs_static: ctx.dyn.deltas,
     },
     market_snapshot: {
       inputs: ctx.env,

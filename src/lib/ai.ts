@@ -268,12 +268,89 @@ export interface TrainResult {
   seed: number;
   iterations: number;
   aversion: number;
+  gen: number;
   history: number[];
   convergence: number;
   adaptive: Coeffs;
   sniper: Coeffs;
   strategies: StrategyResult[];
   recommended: StrategyResult;
+}
+
+/* ---------------- baseline dinámico (evolutivo) ---------------- */
+
+export interface BaselineEvo {
+  gen: number;
+  version: string;
+  label: string;
+  coeffs: Coeffs;
+  deltas: { key: string; from: number; to: number; pct: number }[];
+}
+
+const nud = (base: number, amt: number, k: keyof Coeffs) =>
+  clampCoeff(k, base + amt);
+
+/**
+ * El baseline "balanced" deja de ser estático: se adapta al régimen
+ * detectado y a las features de mercado, y cada re-entrenamiento
+ * incrementa su generación (evolución del nombre de perfil).
+ */
+export function dynamicBaseline(
+  feats: Features,
+  regime: Regime,
+  gen: number,
+): BaselineEvo {
+  const b = BASELINE_COEFFS.balanced;
+  let c: Coeffs = { ...b };
+
+  switch (regime.label) {
+    case "Dump / guerra de precios":
+      c.minMult = nud(b.minMult, 0.1, "minMult");
+      c.normMult = nud(b.normMult, -0.08, "normMult");
+      c.floorPct = nud(b.floorPct, 0.05, "floorPct");
+      break;
+    case "Prima de escasez":
+      c.maxMult = nud(b.maxMult, 0.35, "maxMult");
+      c.normMult = nud(b.normMult, 0.12, "normMult");
+      break;
+    case "Demanda alta":
+      c.normMult = nud(b.normMult, 0.06, "normMult");
+      c.snipePct = nud(b.snipePct, 0.05, "snipePct");
+      break;
+    case "Alta volatilidad":
+      c.shoppingPct = nud(b.shoppingPct, -0.1, "shoppingPct");
+      c.snipePct = nud(b.snipePct, -0.08, "snipePct");
+      c.ceilingMult = nud(b.ceilingMult, -0.3, "ceilingMult");
+      break;
+    case "Mercado estancado":
+      c.minMult = nud(b.minMult, -0.06, "minMult");
+      c.shoppingPct = nud(b.shoppingPct, -0.05, "shoppingPct");
+      break;
+    default:
+      c.minMult = nud(b.minMult, feats.demand * 0.06 - 0.03, "minMult");
+      c.maxMult = nud(b.maxMult, feats.marginPct * 0.3, "maxMult");
+  }
+
+  c = Object.fromEntries(
+    Object.entries(c).map(([k, v]) => [k, r3(v as number)]),
+  ) as unknown as Coeffs;
+
+  const deltas = (Object.keys(c) as (keyof Coeffs)[])
+    .filter((k) => c[k] !== b[k])
+    .map((k) => ({
+      key: k,
+      from: b[k],
+      to: c[k],
+      pct: Math.round(((c[k] - b[k]) / b[k]) * 1000) / 10,
+    }));
+
+  return {
+    gen,
+    version: `v2.4.${gen}`,
+    label: regime.label,
+    coeffs: c,
+    deltas,
+  };
 }
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -283,7 +360,7 @@ export function trainModel(
   env: Record<string, number>,
   src: Record<string, number>,
   feats: Features,
-  opts: { seed: number; iterations: number; aversion: number },
+  opts: { seed: number; iterations: number; aversion: number; gen: number },
 ): TrainResult {
   const rng = mulberry32(opts.seed);
   const ctx: ObjCtx = { env, src, feats, aversion: opts.aversion, snipeFocus: false };
@@ -329,6 +406,7 @@ export function trainModel(
     seed: opts.seed,
     iterations: opts.iterations,
     aversion: opts.aversion,
+    gen: opts.gen,
     history: runA.history,
     convergence,
     adaptive,

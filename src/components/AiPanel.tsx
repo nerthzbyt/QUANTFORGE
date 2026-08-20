@@ -1,4 +1,4 @@
-import type { Features, Regime, TrainResult } from "../lib/ai";
+import { dynamicBaseline, type Features, type Regime, type TrainResult } from "../lib/ai";
 import { Badge, FeatureBar, fmtNum, fmtShort, SectionTitle, Sparkline } from "./ui";
 
 const REGIME_TONE: Record<Regime["color"], string> = {
@@ -17,6 +17,7 @@ interface Props {
 
 export default function AiPanel({ feats, regime, train, training }: Props) {
   const rec = train.recommended;
+  const dyn = dynamicBaseline(feats, regime, train.gen);
   const maxMean = Math.max(...train.strategies.map((s) => s.mc.mean), 1);
 
   return (
@@ -46,6 +47,45 @@ export default function AiPanel({ feats, regime, train, training }: Props) {
             </li>
           ))}
         </ul>
+      </section>
+
+      {/* baseline dinámico */}
+      <section className="panel p-4">
+        <SectionTitle
+          code="04b"
+          title="Baseline dinámico"
+          right={
+            <span className="flex items-center gap-1.5">
+              <Badge tone="gold">{dyn.version}</Badge>
+              <Badge tone="arc">gen {dyn.gen}</Badge>
+            </span>
+          }
+        />
+        <p className="mb-2 font-mono text-[9.5px] leading-snug text-fog-500">
+          El baseline equilibrado ya no es fijo: se <span className="text-fog-300">readapta al régimen</span> y su
+          nombre de perfil <span className="text-fog-300">evoluciona</span> en cada generación (g{dyn.gen}).
+        </p>
+        {dyn.deltas.length === 0 ? (
+          <div className="rounded border border-line-700 bg-ink-900/60 px-2.5 py-2 font-mono text-[10px] text-fog-400">
+            sin derivas: el régimen actual mantiene los coeficientes estáticos.
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {dyn.deltas.map((d) => (
+              <div key={d.key} className="flex items-center justify-between rounded border border-line-700/70 bg-ink-800/40 px-2 py-1">
+                <span className="font-mono text-[10px] text-fog-300">{d.key}</span>
+                <span className="flex items-center gap-1.5 font-mono text-[10px]">
+                  <span className="text-fog-500">{d.from}</span>
+                  <span className="text-fog-600">→</span>
+                  <span className="text-gold-300">{d.to}</span>
+                  <span className={`rounded px-1 text-[9px] font-bold ${d.pct >= 0 ? "bg-mint-500/12 text-mint-400" : "bg-risk-500/12 text-risk-400"}`}>
+                    {d.pct >= 0 ? "+" : ""}{d.pct}%
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* features */}
