@@ -1,4 +1,18 @@
-```typescript
-// No build artifacts, dependencies, or temp files detected in changes
-// Only source files (.ts) were modified
+```
+# Build artifacts
+dist/
+build/
+*.js
+*.css
+
+# Dependencies
+node_modules/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Editors
+.vscode/
+.idea/
 ```
