@@ -21,20 +21,20 @@ export function EventStream({ events = [] }: EventStreamProps) {
       
       // Type filter
       if (typeFilter !== "all") {
-        const isAccepted = event.type.includes("accepted") || event.type === "order.accepted";
-        const isRejected = event.type.includes("rejected") || event.type === "order.rejected";
+        const isAccepted = event.payload.accepted === true;
+        const isRejected = event.payload.accepted === false;
         
         if (typeFilter === "accepted" && !isAccepted) return false;
         if (typeFilter === "rejected" && !isRejected) return false;
       }
       
       // Side filter
-      if (sideFilter !== "all" && event.side?.toLowerCase() !== sideFilter) return false;
+      if (sideFilter !== "all" && event.payload.side?.toLowerCase() !== sideFilter) return false;
       
       // Search query
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        const searchable = `${event.type} ${event.symbol} ${event.reason || ""}`.toLowerCase();
+        const searchable = `${event.type} ${event.symbol} ${event.payload.reason || ""}`.toLowerCase();
         if (!searchable.includes(q)) return false;
       }
       
@@ -45,12 +45,12 @@ export function EventStream({ events = [] }: EventStreamProps) {
   // Calculate rejection stats
   const stats = useMemo(() => {
     const total = events.length;
-    const accepted = events.filter(e => e.type.includes("accepted")).length;
-    const rejected = events.filter(e => e.type.includes("rejected")).length;
+    const accepted = events.filter(e => e.payload.accepted === true).length;
+    const rejected = events.filter(e => e.payload.accepted === false).length;
     
     const reasons: Record<string, number> = {};
-    events.filter(e => e.type.includes("rejected") && e.reason).forEach(e => {
-      reasons[e.reason!] = (reasons[e.reason!] || 0) + 1;
+    events.filter(e => e.payload.accepted === false && e.payload.reason).forEach(e => {
+      reasons[e.payload.reason!] = (reasons[e.payload.reason!] || 0) + 1;
     });
 
     return { total, accepted, rejected, reasons };
@@ -143,19 +143,19 @@ export function EventStream({ events = [] }: EventStreamProps) {
           </div>
         ) : (
           filteredEvents.slice(0, 100).map((event, idx) => (
-            <div key={`${event.timestamp}-${idx}`} className="ledger-line">
-              <span className="ledger-ts">{formatTs(event.timestamp)}</span>
-              <span className={`ledger-type ${event.type.includes("rejected") ? "rejected" : "accepted"}`}>
+            <div key={`${event.ts}-${idx}`} className="ledger-line">
+              <span className="ledger-ts">{formatTs(event.ts)}</span>
+              <span className={`ledger-type ${!event.payload.accepted ? "rejected" : "accepted"}`}>
                 {event.type}
               </span>
               <span className="ledger-symbol">{event.symbol}</span>
               <span className="ledger-detail">
-                {event.side && <span className="mr-2">{event.side.toUpperCase()}</span>}
-                {event.qty !== undefined && <span className="mr-2">Qty: {event.qty}</span>}
-                {event.mid !== undefined && <span className="mr-2">Mid: {event.mid.toFixed(2)}</span>}
-                {event.spread !== undefined && <span className="mr-2">Spread: {event.spread.toFixed(2)}bps</span>}
-                {event.position !== undefined && <span className="mr-2">Pos: {event.position}</span>}
-                {event.reason && <span className="text-risk-400">Reason: {event.reason}</span>}
+                {event.payload.side && <span className="mr-2">{event.payload.side.toUpperCase()}</span>}
+                {event.payload.qty !== undefined && <span className="mr-2">Qty: {event.payload.qty}</span>}
+                {event.payload.mid !== undefined && <span className="mr-2">Mid: {event.payload.mid.toFixed(2)}</span>}
+                {event.payload.spread_bps !== undefined && <span className="mr-2">Spread: {event.payload.spread_bps.toFixed(2)}bps</span>}
+                {event.payload.position !== undefined && <span className="mr-2">Pos: {event.payload.position}</span>}
+                {event.payload.reason && <span className="text-risk-400">Reason: {event.payload.reason}</span>}
               </span>
             </div>
           ))

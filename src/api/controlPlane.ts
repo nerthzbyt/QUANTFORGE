@@ -25,8 +25,8 @@ export interface ConfigResponse {
     max_order_qty: number;
     symbol_whitelist: string[];
     price_bands: {
-      lower_bps: number;
-      upper_bps: number;
+      BTCUSD: { min: number; max: number };
+      ETHUSD: { min: number; max: number };
     };
   };
   rollout: {
@@ -37,12 +37,11 @@ export interface ConfigResponse {
 }
 
 export interface LiquidityLevel {
-  price: number;
-  qty: number;
-  notional: number;
+  bids: number;
+  asks: number;
 }
 
-export interface LiquidityResponse {
+export interface LiquidityCandidate {
   venue: string;
   kind: string;
   symbol: string;
@@ -56,24 +55,44 @@ export interface LiquidityResponse {
   topBidNotional: number;
   topAskNotional: number;
   depthBandBps: number;
-  levels: LiquidityLevel[];
-  exchangeTimestamp: number;
-  receivedAt: number;
+  levels: LiquidityLevel;
+  exchangeTimestamp: number | string;
+  receivedAt: string;
   score: number;
-  failures: number;
+}
+
+export interface LiquidityFailure {
+  venue: string;
+  error: string;
+}
+
+export interface LiquidityResponse {
+  symbol: string;
+  best?: string;
+  candidates: LiquidityCandidate[];
+  failures: LiquidityFailure[];
+}
+
+export interface EventPayload {
+  accepted: boolean;
+  reason?: string;
+  qty?: number;
+  side?: string;
+  mid?: number;
+  spread_bps?: number;
+  position?: number;
 }
 
 export interface TradingEvent {
-  timestamp: number;
+  ts: number;
   type: string;
   symbol: string;
   config_version: number;
-  side?: string;
-  qty?: number;
-  mid?: number;
-  spread?: number;
-  position?: number;
-  reason?: string;
+  payload: EventPayload;
+}
+
+export interface EventsResponse {
+  events: TradingEvent[];
 }
 
 class ApiError extends Error {
@@ -128,20 +147,20 @@ export const controlPlaneApi = {
     return fetchJson<ConfigResponse>("/config");
   },
 
-  async liquidity(symbol: string): Promise<LiquidityResponse[]> {
-    return fetchJson<LiquidityResponse[]>(`/liquidity?symbol=${encodeURIComponent(symbol)}`);
+  async liquidity(symbol: string): Promise<LiquidityResponse> {
+    return fetchJson<LiquidityResponse>(`/liquidity?symbol=${encodeURIComponent(symbol)}`);
   },
 
   async events(): Promise<TradingEvent[]> {
-    const data = await fetchJson<string | TradingEvent[]>("/events");
+    const data = await fetchJson<EventsResponse | string>("/events");
     if (typeof data === "string") {
       // JSONL format - parse each line
       return data
         .split("\n")
         .filter((line) => line.trim())
-        .map((line) => JSON.parse(line));
+        .map((line) => JSON.parse(line)) as TradingEvent[];
     }
-    return data;
+    return data.events || [];
   },
 };
 

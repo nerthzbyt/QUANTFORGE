@@ -4,15 +4,18 @@ import type { LiquidityResponse } from "../api/controlPlane";
 
 interface MarketHeroProps {
   symbol: string;
-  data?: LiquidityResponse[];
+  data?: LiquidityResponse;
   isStale?: boolean;
 }
 
 export function MarketHero({ symbol, data, isStale = false }: MarketHeroProps) {
-  // Find best venue by spread
-  const bestVenue = data?.reduce((best, curr) => 
-    (!best || curr.spreadBps < best.spreadBps) ? curr : best
-  , undefined);
+  // Find best venue by spread from candidates
+  const candidates = data?.candidates || [];
+  const bestVenue = candidates.length > 0 
+    ? candidates.reduce((best, curr) => 
+        (!best || curr.spreadBps < best.spreadBps) ? curr : best
+      , undefined as typeof candidates[0])
+    : undefined;
 
   if (!bestVenue) {
     return (
@@ -62,7 +65,7 @@ export function MarketHero({ symbol, data, isStale = false }: MarketHeroProps) {
           BEST VENUE: <span className="text-fog-300">{venueDisplayName(bestVenue.venue)}</span>
         </div>
         <div className="font-mono text-[9px] text-fog-500">
-          EXCHANGE TS: <span className="text-fog-300">{new Date(bestVenue.exchangeTimestamp).toISOString().slice(11, 23)}</span>
+          EXCHANGE TS: <span className="text-fog-300">{formatTs(bestVenue.exchangeTimestamp)}</span>
         </div>
       </div>
     </div>
@@ -87,4 +90,10 @@ function venueDisplayName(venue: string): string {
     bybit_spot: "Bybit Spot",
   };
   return map[venue] || venue;
+}
+
+function formatTs(ts: number | string): string {
+  const num = typeof ts === "string" ? parseFloat(ts) : ts;
+  if (isNaN(num)) return "N/A";
+  return new Date(num).toISOString().slice(11, 23);
 }

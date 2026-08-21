@@ -70,7 +70,8 @@ export function ConfigPanel({ config }: ConfigPanelProps) {
           />
           <ConfigRow 
             label="Price Bands" 
-            value={`${config.risk.price_bands.lower_bps} / ${config.risk.price_bands.upper_bps} bps`} 
+            value={`BTC: ${config.risk.price_bands.BTCUSD.min}-${config.risk.price_bands.BTCUSD.max} | ETH: ${config.risk.price_bands.ETHUSD.min}-${config.risk.price_bands.ETHUSD.max}`}
+            mono
           />
         </div>
 

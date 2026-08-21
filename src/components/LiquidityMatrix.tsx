@@ -1,13 +1,16 @@
 import React from "react";
 import { fmtPrice, fmtBps, fmtShortNumber, fmtTimestamp } from "../lib/utils";
-import type { LiquidityResponse } from "../api/controlPlane";
+import type { LiquidityResponse, LiquidityCandidate } from "../api/controlPlane";
 
 interface LiquidityMatrixProps {
-  data?: LiquidityResponse[];
+  data?: LiquidityResponse;
 }
 
-export function LiquidityMatrix({ data = [] }: LiquidityMatrixProps) {
-  if (!data || data.length === 0) {
+export function LiquidityMatrix({ data }: LiquidityMatrixProps) {
+  const candidates = data?.candidates || [];
+  const failures = data?.failures || [];
+
+  if (!candidates || candidates.length === 0) {
     return (
       <div className="panel">
         <div className="section-header">
@@ -24,14 +27,14 @@ export function LiquidityMatrix({ data = [] }: LiquidityMatrixProps) {
   }
 
   // Sort by spread (best first)
-  const sorted = [...data].sort((a, b) => a.spreadBps - b.spreadBps);
+  const sorted = [...candidates].sort((a, b) => a.spreadBps - b.spreadBps);
   const bestSpread = sorted[0]?.spreadBps ?? Infinity;
 
   return (
     <div className="panel overflow-hidden">
       <div className="section-header px-3">
         <span className="section-title">LIQUIDITY MATRIX / VENUES</span>
-        <span className="font-mono text-[9px] text-fog-500">{data.length} venues</span>
+        <span className="font-mono text-[9px] text-fog-500">{candidates.length} venues</span>
       </div>
       
       <div className="overflow-x-auto">
@@ -75,7 +78,7 @@ export function LiquidityMatrix({ data = [] }: LiquidityMatrixProps) {
                   <td className="num mono">{fmtShortNumber(venue.askDepthNotional)}</td>
                   <td className="num mono">{fmtShortNumber(venue.topBidNotional)}</td>
                   <td className="num mono">{fmtShortNumber(venue.topAskNotional)}</td>
-                  <td className="num mono">{venue.levels?.length || "N/A"}</td>
+                  <td className="num mono">{formatLevels(venue.levels)}</td>
                   <td className="num mono">{venue.score.toFixed(2)}</td>
                   <td className="num mono text-fog-500">{formatTs(venue.exchangeTimestamp)}</td>
                 </tr>
@@ -84,6 +87,19 @@ export function LiquidityMatrix({ data = [] }: LiquidityMatrixProps) {
           </tbody>
         </table>
       </div>
+
+      {failures.length > 0 && (
+        <div className="border-t border-line-800 px-3 py-2">
+          <div className="font-mono text-[8px] uppercase tracking-[0.12em] text-risk-400 mb-1">
+            FAILURES ({failures.length})
+          </div>
+          {failures.map((f, idx) => (
+            <div key={idx} className="font-mono text-[9px] text-fog-500">
+              {f.venue}: {f.error}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -99,6 +115,12 @@ function venueDisplayName(venue: string): string {
   return map[venue] || venue;
 }
 
-function formatTs(ts: number): string {
-  return new Date(ts).toISOString().slice(11, 19);
+function formatLevels(levels: { bids: number; asks: number }): string {
+  return `${levels.bids}/${levels.asks}`;
+}
+
+function formatTs(ts: number | string): string {
+  const num = typeof ts === "string" ? parseFloat(ts) : ts;
+  if (isNaN(num)) return "N/A";
+  return new Date(num).toISOString().slice(11, 19);
 }

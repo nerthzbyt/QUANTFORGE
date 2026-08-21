@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { controlPlaneApi, type HealthResponse, type ConfigResponse, type LiquidityResponse, type TradingEvent } from "../api/controlPlane";
+import { controlPlaneApi, type HealthResponse, type ConfigResponse, type LiquidityResponse, type TradingEvent, type LiquidityCandidate } from "../api/controlPlane";
 
 const QUERY_KEYS = {
   health: ["health"],
@@ -29,7 +29,7 @@ export function useConfig(refreshInterval?: number) {
 }
 
 export function useLiquidity(symbol: string, refreshInterval?: number) {
-  return useQuery<LiquidityResponse[], Error>({
+  return useQuery<LiquidityResponse, Error>({
     queryKey: QUERY_KEYS.liquidity(symbol),
     queryFn: () => controlPlaneApi.liquidity(symbol),
     refetchInterval: refreshInterval || 2000,

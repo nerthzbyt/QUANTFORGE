@@ -3,11 +3,13 @@ import { fmtBps } from "../lib/utils";
 import type { LiquidityResponse } from "../api/controlPlane";
 
 interface SpreadMonitorProps {
-  data?: LiquidityResponse[];
+  data?: LiquidityResponse;
 }
 
-export function SpreadMonitor({ data = [] }: SpreadMonitorProps) {
-  if (!data || data.length === 0) {
+export function SpreadMonitor({ data }: SpreadMonitorProps) {
+  const candidates = data?.candidates || [];
+
+  if (!candidates || candidates.length === 0) {
     return (
       <div className="panel">
         <div className="section-header px-3">
@@ -23,7 +25,7 @@ export function SpreadMonitor({ data = [] }: SpreadMonitorProps) {
     );
   }
 
-  const sorted = [...data].sort((a, b) => a.spreadBps - b.spreadBps);
+  const sorted = [...candidates].sort((a, b) => a.spreadBps - b.spreadBps);
   const bestSpread = sorted[0]?.spreadBps ?? 0;
   const worstSpread = sorted[sorted.length - 1]?.spreadBps ?? 0;
   const avgSpread = sorted.reduce((sum, v) => sum + v.spreadBps, 0) / sorted.length;
