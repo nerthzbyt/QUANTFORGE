@@ -1,18 +1,38 @@
 ```
-# Build artifacts
-dist/
-build/
-*.js
-*.css
-
 # Dependencies
 node_modules/
 
-# Logs and temp files
-*.log
-*.tmp
+# Build artifacts
+dist/
+build/
+target/
 
-# Editors
+# Environment variables
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
+
+# Editor/IDE files
 .vscode/
 .idea/
+*.swp
+*.swo
+*.tmp
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# OS generated files
+.DS_Store
+Thumbs.db
 ```
