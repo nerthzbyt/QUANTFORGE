@@ -1,18 +1,63 @@
-```
-# Build artifacts
-dist/
-build/
-*.js
-*.css
-
+```gitignore
 # Dependencies
 node_modules/
 
-# Logs and temp files
-*.log
-*.tmp
+# Build outputs
+dist/
+build/
+*.js.map
+*.ts.map
 
-# Editors
+# Environment variables
+.env
+.env.local
+*.env.*
+
+# Editor files
 .vscode/
 .idea/
+*.swp
+*.swo
+*.tmp
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Python (if applicable)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.Pytest_cache/
+
+# Node.js (if applicable)
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Compression
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.Z
+*.lz
+*.tar.gz
+*.tar.bz2
+*.tar.xz
 ```
